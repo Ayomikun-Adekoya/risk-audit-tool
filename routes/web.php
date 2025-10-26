@@ -18,20 +18,28 @@ use Illuminate\Support\Facades\Auth;
 // Home Page → Dashboard for logged-in users, Guest landing for others
 Route::get('/', function () {
     if (Auth::check()) {
-        // Logged-in users → dashboard controller
         return app(DashboardController::class)->index();
     }
-
-    // Guests → show home in "landing mode"
     return view('home', ['isGuest' => true]);
 })->name('home');
 
-// Guest Scan (free/public scan without login)
-Route::get('/scan', [ScanController::class, 'guestScan'])->name('guest.scan');
-Route::post('/scan', [ScanController::class, 'runGuestScan'])->name('guest.scan.run');
 
-// Protected routes → only for authenticated & verified users
+// =====================
+// 🧭 Guest Scan Routes
+// =====================
+
+// Show the guest quick-scan form (reuse scans.create but limited)
+Route::get('/scan', [ScanController::class, 'guestScan'])->name('guest.scan');
+
+// Handle guest scan submission (quick scan only, queued)
+Route::post('/scan/run', [ScanController::class, 'runGuestScan'])->name('guest.scan.run');
+
+
+// =====================
+// 🔐 Authenticated Routes
+// =====================
 Route::middleware(['auth', 'verified'])->group(function () {
+
     // Profile Management
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -39,6 +47,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Scans
     Route::resource('scans', ScanController::class);
+
+    // AJAX polling route for scan status
+    Route::get('scans/{scan}/status', [ScanController::class, 'status'])->name('scans.status');
 
     // Reports
     Route::resource('reports', ReportController::class);
@@ -48,6 +59,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Vulnerabilities
     Route::resource('vulnerabilities', VulnerabilityController::class);
+    Route::get('/scans/{scan}/status', [ScanController::class, 'status'])
+     ->name('scans.status');
+
 });
 
-require __DIR__.'/auth.php';
+require __DIR__ . '/auth.php';

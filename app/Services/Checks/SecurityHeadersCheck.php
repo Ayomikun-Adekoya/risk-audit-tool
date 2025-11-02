@@ -2,57 +2,32 @@
 
 namespace App\Services\Checks;
 
-use GuzzleHttp\Client;
-
-class SecurityHeadersCheck
+class SecurityHeadersCheck extends BaseCheck
 {
     public function run(string $url, $depth = null, $scan = null): array
     {
-        $client = new Client(['http_errors' => false, 'verify' => false, 'timeout' => 15]);
+        $findings = [];
+        $hasLogging = true;
+
         try {
-            $res = $client->get($url);
+            $res = $this->client->get($url);
         } catch (\Throwable $e) {
-            // network error or unreachable - no findings here
-            return [];
+            return ['findings' => [], 'metrics' => ['has_logging_enabled' => false]];
         }
 
         $headers = array_change_key_case($res->getHeaders(), CASE_LOWER);
-        $findings = [];
+        $required = ['content-security-policy', 'x-frame-options', 'x-content-type-options'];
 
-        $wanted = [
-            'content-security-policy',
-            'x-frame-options',
-            'x-content-type-options',
-            'strict-transport-security'
-        ];
-
-        foreach ($wanted as $h) {
-            if (!isset($headers[$h])) {
+        foreach ($required as $header) {
+            if (!isset($headers[$header])) {
                 $findings[] = [
                     'category' => 'A05: Security Misconfiguration',
-                    'title' => "Missing header: {$h}",
-                    'description' => "The response does not contain the {$h} header. Configure server/app to add it.",
+                    'title' => "Missing {$header}",
                     'severity' => 'medium',
-                    'evidence' => ['present_headers' => array_keys($headers)],
                 ];
             }
         }
 
-        // cookie flags
-        if (isset($headers['set-cookie'])) {
-            foreach ($headers['set-cookie'] as $cookieLine) {
-                if (stripos($cookieLine, 'httponly') === false) {
-                    $findings[] = [
-                        'category' => 'A07: Identification & Auth Failures',
-                        'title' => 'Cookie missing HttpOnly flag',
-                        'description' => 'Set the HttpOnly flag on cookies to mitigate XSS session hijacking risks.',
-                        'severity' => 'low',
-                        'evidence' => ['cookie' => $cookieLine],
-                    ];
-                }
-            }
-        }
-
-        return $findings;
+        return ['findings' => $findings, 'metrics' => ['has_logging_enabled' => $hasLogging]];
     }
 }

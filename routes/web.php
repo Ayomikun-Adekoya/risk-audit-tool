@@ -48,11 +48,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Scans
     Route::resource('scans', ScanController::class);
 
+
+Route::get('/reports/{report}/download', [ReportController::class, 'download'])->name('reports.download');
+
+
     // AJAX polling route for scan status
     Route::get('scans/{scan}/status', [ScanController::class, 'status'])->name('scans.status');
 
     // Reports
     Route::resource('reports', ReportController::class);
+    // Reports
+Route::resource('reports', ReportController::class)->only(['index', 'show']);
+Route::get('reports/{report}/download', [ReportController::class, 'download'])
+    ->name('reports.download');
+
 
     // Audit Logs
     Route::resource('logs', AuditLogController::class);

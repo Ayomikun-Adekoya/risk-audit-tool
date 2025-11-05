@@ -58,3 +58,4 @@ class Scan extends Model
         return $this->hasOne(Report::class);
     }
 }
+    

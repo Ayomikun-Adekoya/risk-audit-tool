@@ -6,7 +6,8 @@
 <section class="welcome-section fade-in text-center bg-gradient-to-r from-teal-50 via-blue-50 to-white py-10">
     <div class="welcome-content">
         <h1 class="text-3xl md:text-4xl font-bold text-teal-700">🔍 Security Scan Report</h1>
-        <p class="text-gray-600 mt-2">Comprehensive analysis and recommendations for 
+        <p class="text-gray-600 mt-2">
+            Comprehensive analysis and recommendations for 
             <span class="text-blue-700 font-semibold">{{ $scan->target_url }}</span>
         </p>
     </div>
@@ -53,14 +54,35 @@
 
 @if($scan->status === 'completed')
     @php
-        // Use the casted array directly (no json_decode)
-        $results = $scan->results ?? [];
-        $owaspResults = $results['owasp_results'] ?? [];
-        $summary = $results['summary'] ?? [];
-        $passCount = $summary['passed'] ?? 0;
-        $failCount = $summary['failed'] ?? 0;
+        // Analyze scan using OWASP service
+        $owaspResults = \App\Services\OwaspAnalyzer::analyze($scan);
+
+        // Count actual pass/fail results from analyzer output
+        $passCount = 0;
+        $failCount = 0;
+        foreach ($owaspResults as $item) {
+            if (($item['status'] ?? '') === 'Passed') {
+                $passCount++;
+            } else {
+                $failCount++;
+            }
+        }
+
         $totalCount = $passCount + $failCount;
-        $passRate = $summary['score'] ?? 0;
+        $scorePercent = $totalCount > 0 ? round(($passCount / $totalCount) * 100, 1) : 0;
+
+        // Compute other diagnostic metrics
+        $criticalIssues = (
+            ($scan->sql_injections_detected ?? 0) +
+            ($scan->access_control_issues ?? 0) +
+            ($scan->weak_passwords_detected ?? 0) +
+            (($scan->ssrf_detected ?? false) ? 1 : 0)
+        );
+
+        $riskScore = ($criticalIssues * 10) + (($scan->open_ports_count ?? 0) > 0 ? 5 : 0);
+        $riskLevel = $riskScore >= 75 ? 'Critical' :
+                    ($riskScore >= 50 ? 'High' :
+                    ($riskScore >= 25 ? 'Medium' : 'Low'));
     @endphp
 
     <!-- Risk Assessment -->
@@ -69,14 +91,11 @@
             <h3 class="text-xl font-bold mb-4 text-teal-700">🧮 Risk Assessment Overview</h3>
             <div class="grid grid-cols-1 md:grid-cols-4 gap-6 text-center">
                 <div class="p-6 bg-white border border-blue-100 rounded-xl shadow-sm">
-                    <div class="text-4xl font-bold text-blue-700">{{ $scan->risk_score ?? 'N/A' }}</div>
-                    <p class="text-sm text-gray-600 mt-1">Overall Risk Score</p>
-                    @php
-                        $riskLevel = $scan->risk_score >= 75 ? 'Critical' :
-                                    ($scan->risk_score >= 50 ? 'High' :
-                                    ($scan->risk_score >= 25 ? 'Medium' : 'Low'));
-                    @endphp
-                    <div class="mt-1 text-xs font-semibold text-gray-700">{{ $riskLevel }} Risk</div>
+                    <div class="text-4xl font-bold text-blue-700">{{ $scorePercent }}%</div>
+                    <p class="text-sm text-gray-600 mt-1">Overall Security Score</p>
+                    <div class="mt-1 text-xs font-semibold text-gray-700">
+                        {{ $passCount }} Passed / {{ $failCount }} Failed
+                    </div>
                 </div>
 
                 <div class="p-6 bg-white border border-blue-100 rounded-xl shadow-sm">
@@ -116,8 +135,8 @@
                 <div><strong>Open Ports:</strong> {{ $scan->open_ports_count ?? 0 }}</div>
                 <div><strong>Access Control Issues:</strong> {{ $scan->access_control_issues ?? 0 }}</div>
                 <div><strong>Weak Passwords Detected:</strong> {{ $scan->weak_passwords_detected ?? 0 }}</div>
-                <div><strong>Logging Enabled:</strong> {{ $scan->has_logging_enabled ? 'Yes' : 'No' }}</div>
-                <div><strong>SSRF Detected:</strong> {{ $scan->ssrf_detected ? 'Yes' : 'No' }}</div>
+                <div><strong>Logging Enabled:</strong> {{ ($scan->has_logging_enabled ?? false) ? 'Yes' : 'No' }}</div>
+                <div><strong>SSRF Detected:</strong> {{ ($scan->ssrf_detected ?? false) ? 'Yes' : 'No' }}</div>
             </div>
         </div>
     </section>
@@ -140,7 +159,7 @@
             <div class="space-y-4">
                 @foreach ($owaspResults as $code => $result)
                     @php
-                        $isPassed = $result['status'] === 'Passed';
+                        $isPassed = ($result['status'] ?? '') === 'Passed';
                         $severityColors = [
                             'A01' => 'border-red-300 bg-red-50',
                             'A02' => 'border-orange-300 bg-orange-50',
@@ -159,7 +178,7 @@
                                     <h4 class="font-semibold text-gray-900">{{ $result['title'] }}</h4>
                                 </div>
                                 <p class="text-sm text-gray-700 mt-2">
-                                    <strong>Recommendation:</strong> {{ $result['recommendation'] }}
+                                    <strong>Recommendation:</strong> {{ $result['recommendation'] ?? '—' }}
                                 </p>
                             </div>
                             <div class="ml-4">
@@ -185,19 +204,16 @@
 <section class="stats-section mt-10 mb-12">
     <div class="stat-card fade-in bg-white border border-blue-100 shadow-md rounded-2xl p-6 flex flex-wrap gap-4">
         @if($scan->status === 'completed')
-            <a href="{{ route('reports.create', ['scan_id' => $scan->id]) }}" 
+           <a href="{{ route('reports.download', ['report' => $scan->id]) }}" 
                class="btn btn-primary flex-1 md:flex-none bg-teal-600 hover:bg-teal-700 text-white shadow-md">
-                📊 Generate Full Report
+                📊 Generate Full Report (PDF)
             </a>
             <a href="{{ route('scans.index') }}" 
                class="btn btn-accent flex-1 md:flex-none bg-blue-600 hover:bg-blue-700 text-white shadow-md">
                 🔄 Run New Scan
             </a>
         @endif
-        <a href="{{ route('scans.edit', $scan) }}" 
-           class="btn btn-accent flex-1 md:flex-none bg-sky-500 hover:bg-sky-600 text-white shadow-md">
-            ✏️ Edit Scan
-        </a>
+
         <form method="POST" action="{{ route('scans.destroy', $scan) }}" 
               onsubmit="return confirm('Are you sure you want to delete this scan? This action cannot be undone.')" 
               class="flex-1 md:flex-none">
@@ -209,6 +225,7 @@
         </form>
     </div>
 </section>
+
 
 <!-- Polling Script -->
 <script>

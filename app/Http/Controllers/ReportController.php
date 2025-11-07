@@ -4,19 +4,26 @@ namespace App\Http\Controllers;
 
 use App\Models\Scan;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use App\Services\OwaspAnalyzer;
 
 class ReportController extends Controller
 {
     /**
-     * Display a listing of completed scan reports with summary stats.
+     * Display a listing of completed scan reports with summary stats (only for the logged-in user).
      */
     public function index()
     {
-        $reports = Scan::where('status', 'completed')->latest()->get();
+        $user = Auth::user();
 
-        // Compute advanced summary based on actual vulnerability fields
+        // Only fetch completed scans belonging to the logged-in user
+        $reports = Scan::where('user_id', $user->id)
+            ->where('status', 'completed')
+            ->latest()
+            ->get();
+
+        // Compute summary based on user's own reports
         $summary = [
             'total' => $reports->count(),
             'passed' => $reports->filter(function ($r) {
@@ -53,11 +60,14 @@ class ReportController extends Controller
     }
 
     /**
-     * Show a single report with OWASP analysis.
+     * Show a single report (only if it belongs to the logged-in user).
      */
     public function show($id)
     {
-        $report = Scan::findOrFail($id);
+        $report = Scan::where('id', $id)
+            ->where('user_id', Auth::id())
+            ->firstOrFail();
+
         $owaspResults = OwaspAnalyzer::analyze($report);
 
         // Decode JSON results if available
@@ -74,11 +84,14 @@ class ReportController extends Controller
     }
 
     /**
-     * Generate and download a PDF version of the report.
+     * Generate and download a PDF version of the report (only if it belongs to the user).
      */
     public function download($id)
     {
-        $report = Scan::findOrFail($id);
+        $report = Scan::where('id', $id)
+            ->where('user_id', Auth::id())
+            ->firstOrFail();
+
         $owaspResults = OwaspAnalyzer::analyze($report);
 
         $pdf = \PDF::loadView('reports.pdf', [

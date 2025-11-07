@@ -21,14 +21,7 @@
                            class="nav-link {{ request()->routeIs('reports.*') ? 'active' : '' }}">
                             📊 <span class="hidden lg:inline">Reports</span>
                         </a>
-                        <a href="{{ route('logs.index') }}" 
-                           class="nav-link {{ request()->routeIs('logs.*') ? 'active' : '' }}">
-                            👀 <span class="hidden lg:inline">Audit Logs</span>
-                        </a>
-                        <a href="{{ route('vulnerabilities.index') }}" 
-                           class="nav-link {{ request()->routeIs('vulnerabilities.*') ? 'active' : '' }}">
-                            ⚠️ <span class="hidden lg:inline">Vulnerabilities</span>
-                        </a>
+                  
                     @else
                         <a href="{{ route('guest.scan') }}" 
                            class="nav-link {{ request()->routeIs('guest.*') ? 'active' : '' }}">
